@@ -2679,6 +2679,103 @@ function renderPractice(){
   document.querySelector('#view-practice').innerHTML=`<div class="card"><h2>Topic practice</h2><p class="muted">Use this after learning. Source labels are explicit: verified previous questions are never mixed with model questions.</p><div class="form-grid"><div class="field"><label>Topic</label><select id="practiceTopic">${options}</select></div><div class="field"><label>Questions</label><select id="practiceCount"><option>10</option><option>15</option><option>20</option><option>25</option><option>50</option></select></div><div class="field"><label>Question source</label><select id="practiceSource"><option value="MODEL">Model questions</option><option value="PYQ">Verified previous questions only</option><option value="ALL">All verified + model</option></select></div><div class="field"><label>Mode</label><select id="practiceMode"><option value="practice">Instant correction + explanation</option><option value="topicTest">Timed topic test</option></select></div></div><div style="margin-top:14px"><button class="primary" onclick="startPracticeFromForm()">Start session</button></div></div>`;
 }
 
+
+function previousPaperQuestions(year,paper){
+  return QUESTION_BANK
+    .filter(q=>q.source==='PYQ' && q.year===year && q.paper===paper)
+    .sort((a,b)=>(a.questionNo||0)-(b.questionNo||0));
+}
+function startPreviousPaper(year,paper){
+  const pool=previousPaperQuestions(year,paper);
+  if(!pool.length) return toast('No source-traceable questions are loaded for this paper yet.');
+  startSession(pool,'mock',{previousPaper:true,year,paper});
+}
+function renderPreviousPapers(){
+  const p2_2023=previousPaperQuestions(2023,'P2');
+  const p3_2023=previousPaperQuestions(2023,'P3');
+  const p2_2018=previousPaperQuestions(2018,'P2');
+  const qnos=p2_2023.map(q=>q.questionNo).filter(Boolean);
+  const coverage=Math.round((p2_2023.length/200)*1000)/10;
+  const topicCounts={};
+  p2_2023.forEach(q=>topicCounts[q.topic]=(topicCounts[q.topic]||0)+1);
+  const topicHtml=Object.entries(topicCounts)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([t,n])=>'<span class="badge">'+TOPIC_NAME[t]+' · '+n+'</span>')
+    .join(' ');
+  const sourceMap=new Map();
+  p2_2023.forEach(q=>{if(q.sourceUrl)sourceMap.set(q.sourceUrl,q.sourceTitle||'Published 2023 transcript');});
+  const transcriptLinks=[...sourceMap.entries()].map(([url,title],i)=>
+    '<a class="source-link" href="'+url+'" target="_blank" rel="noopener">Transcript source '+(i+1)+' ↗</a>'
+  ).join(' &nbsp; ');
+  const p3Archive=VERIFIED_PYQ_ARCHIVE.find(x=>x.year===2023&&x.paper==='P3');
+  const p2Archive=VERIFIED_PYQ_ARCHIVE.find(x=>x.year===2023&&x.paper==='P2');
+  const p2018Archive=VERIFIED_PYQ_ARCHIVE.find(x=>x.year===2018&&x.paper==='P2');
+
+  document.querySelector('#view-papers').innerHTML=`
+    <div class="card hero-learn">
+      <div>
+        <span class="badge good">Source-first archive</span>
+        <h2>Previous Question Papers</h2>
+        <p class="muted">Practice real previous-exam material without mixing it with model questions. Every imported PYQ keeps its year, booklet, original question number and source.</p>
+      </div>
+      <div class="learn-score"><strong>${p2_2023.length}</strong><span>verified 2023 P2 questions loaded</span></div>
+    </div>
+
+    <div class="source-warning">
+      <strong>Accuracy rule:</strong> a paper is marked “full” only when the complete question text is source-verifiable. An answer key by itself is never used to invent missing questions.
+    </div>
+
+    <div class="section-title"><h2>2023 Paper II · Arithmetic & Reasoning</h2><span>Booklet-A source-traceable import</span></div>
+    <div class="card">
+      <div class="row spread">
+        <div><h3>Imported coverage: ${p2_2023.length}/200 questions</h3><p class="muted">${coverage}% of the full 200-question paper is currently available inside the trainer.</p></div>
+        <span class="badge ${p2_2023.length>=200?'good':'warn'}">${p2_2023.length>=200?'Full paper ready':'Partial verified set'}</span>
+      </div>
+      <div class="progress"><span style="width:${Math.min(100,coverage)}%"></span></div>
+      <p><strong>Original question numbers loaded:</strong> ${qnos.join(', ')||'None yet'}</p>
+      <div class="row wrap" style="margin:12px 0">${topicHtml||'<span class="muted">No topic mapping yet.</span>'}</div>
+      <div class="row wrap">
+        <button class="primary" onclick="startPreviousPaper(2023,'P2')">Practice ${p2_2023.length} available PYQs in original order</button>
+        ${p2_2023.length>=200?'<button class="secondary" onclick="startPreviousPaper(2023,\'P2\')">Start full 200Q timed replay</button>':''}
+      </div>
+      <div style="margin-top:14px">${transcriptLinks}</div>
+      <p class="muted" style="margin-top:12px">Imported questions are labelled PYQ-derived because their wording is faithfully paraphrased from the published transcript rather than claimed as a verbatim official booklet scan.</p>
+    </div>
+
+    <div class="section-title"><h2>2023 Paper III · Technical</h2><span>Official answer-key source verified</span></div>
+    <div class="card">
+      <div class="row spread"><div><h3>${p3_2023.length}/200 question texts loaded</h3><p class="muted">The official preliminary answer key confirms the 200-question Technical Paper, but an answer key does not contain enough information to reconstruct the questions safely.</p></div><span class="badge warn">Question text pending</span></div>
+      <div class="progress"><span style="width:${Math.min(100,p3_2023.length/2)}%"></span></div>
+      <div class="row wrap" style="margin-top:14px">
+        ${p3Archive?'<a class="source-link" href="'+p3Archive.url+'" target="_blank" rel="noopener">Open official 2023 Technical preliminary key ↗</a>':''}
+        ${p3_2023.length?'<button class="primary" onclick="startPreviousPaper(2023,\'P3\')">Practice loaded Technical PYQs</button>':''}
+      </div>
+    </div>
+
+    <div class="section-title"><h2>Older paper archive</h2><span>Import only when wording is verifiable</span></div>
+    <div class="grid paper-grid">
+      <div class="card">
+        <span class="badge">2018 · Paper II</span>
+        <h3>Arithmetic & Reasoning</h3>
+        <p><strong>${p2_2018.length}/200</strong> question texts currently loaded.</p>
+        <p class="muted">${p2018Archive?p2018Archive.note:'Source reference retained; full question text not yet imported.'}</p>
+        ${p2018Archive?'<a class="source-link" href="'+p2018Archive.url+'" target="_blank" rel="noopener">Open available source ↗</a>':''}
+      </div>
+      <div class="card">
+        <span class="badge good">How this section grows</span>
+        <h3>Import pipeline</h3>
+        <p>Full official booklet / trustworthy scan → verify question number → classify topic → attach answer/explanation → add to paper replay → add to topic-wise PYQ practice.</p>
+        <p class="muted">This keeps the Previous Papers section useful without silently turning model questions into “PYQs”.</p>
+      </div>
+    </div>
+
+    <div class="section-title"><h2>Source archive</h2><span>Open the evidence used by the trainer</span></div>
+    <div class="grid paper-grid">
+      ${VERIFIED_PYQ_ARCHIVE.map(x=>'<div class="card"><span class="badge">'+x.year+' · '+x.paper+'</span><h3>'+x.name+'</h3><p><strong>'+x.date+'</strong></p><p class="muted">'+x.status+'</p><div class="note">'+x.note+'</div><p style="margin-top:12px"><a class="source-link" href="'+x.url+'" target="_blank" rel="noopener">Open source ↗</a></p></div>').join('')}
+    </div>
+  `;
+}
+
 function renderTests(){
   const p2=paperQuestions('P2').length,p3=paperQuestions('P3').length;
   document.querySelector('#view-tests').innerHTML=`
@@ -2760,9 +2857,9 @@ function importProgress(){const f=document.querySelector('#importFile').files[0]
 function resetProgress(){if(!confirm('Delete all local progress?'))return;state=defaults();saveState();renderAll();toast('Progress reset.')}
 function toast(msg){const t=document.querySelector('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
 
-const TITLES={dashboard:['Dashboard','Train by mastery, not by chapter completion.'],learn:['Learn','Official syllabus → concepts → shortcuts → traps → questions.'],strategy:['Exam Strategy','Paper execution, time management, mastery and revision plan.'],syllabus:['Syllabus','Every official topic mapped into a trackable unit.'],practice:['Practice','Instant correction, explanations and review scheduling.'],tests:['Tests & Mocks','Move from topic tests to realistic timed papers.'],mistakes:['Mistake Book','Your weak points should become tomorrow’s revision list.'],alerts:['Press Notes','Official TGPRB updates + separate email-alert status.'],settings:['Data & Settings','Keep your progress portable and under your control.']};
+const TITLES={dashboard:['Dashboard','Train by mastery, not by chapter completion.'],learn:['Learn','Official syllabus → concepts → shortcuts → traps → questions.'],strategy:['Exam Strategy','Paper execution, time management, mastery and revision plan.'],syllabus:['Syllabus','Every official topic mapped into a trackable unit.'],practice:['Practice','Instant correction, explanations and review scheduling.'],tests:['Tests & Mocks','Move from topic tests to realistic timed papers.'],papers:['Previous Papers','Source-traceable previous exams, paper replay and import coverage.'],mistakes:['Mistake Book','Your weak points should become tomorrow’s revision list.'],alerts:['Press Notes','Official TGPRB updates + separate email-alert status.'],settings:['Data & Settings','Keep your progress portable and under your control.']};
 function navigate(view){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.querySelector(`#view-${view}`).classList.add('active');document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===view));document.querySelector('#pageTitle').textContent=TITLES[view][0];document.querySelector('#pageSubtitle').textContent=TITLES[view][1];document.querySelector('#sidebar').classList.remove('open')}
-function renderAll(){renderDashboard();renderLearn();renderStrategy();renderSyllabus();renderPractice();renderTests();renderMistakes();renderAlerts();renderSettings()}
+function renderAll(){renderDashboard();renderLearn();renderStrategy();renderSyllabus();renderPractice();renderTests();renderPreviousPapers();renderMistakes();renderAlerts();renderSettings()}
 renderAll();
 document.querySelector('#nav').addEventListener('click',e=>{const b=e.target.closest('.nav-btn');if(b)navigate(b.dataset.view)});
 document.querySelector('#menuBtn').onclick=()=>document.querySelector('#sidebar').classList.toggle('open');
